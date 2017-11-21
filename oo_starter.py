@@ -6,24 +6,24 @@ import logging
 
 # Custom Modules
 from m_house import House
-from m_house import read_csv
-from m_house import read_csv2
+from m_house import CsvParser
+
 
 # Configure Logging
 import logging
 logger = logging.getLogger(__name__)
 
 def main():
-    house1 = House(1)
-    # logger.info('house1.id = {}'.format(house1.id))
-    logger.info('house1.get_all = {}'.format(house1.get_all()))
+    # house1 = House(1)
+    # # logger.info('house1.id = {}'.format(house1.id))
+    # logger.info('house1.get_all = {}'.format(house1.get_all()))
 
-    house1.set_address("1 Main St, Boston, MA 12345")
-    logger.info('house1.get_address = {}'.format(house1.get_address()))
-    logger.info('house1.get_all = {}'.format(house1.get_all()))
+    # house1.set_address("1 Main St, Boston, MA 12345")
+    # logger.info('house1.get_address = {}'.format(house1.get_address()))
+    # logger.info('house1.get_all = {}'.format(house1.get_all()))
 
-    # Read the csv file
-    read_csv2('data.csv')
+    c = CsvParser('data.csv')
+    c.print_csv()
 
     # logger.info('Adding tricks to dog1...')
     # dog1.add_trick('jump')
