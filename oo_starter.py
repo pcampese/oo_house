@@ -3,6 +3,7 @@
 # Import
 # Built in Modules
 import logging
+import pprint
 
 # Custom Modules
 from m_house import House
@@ -14,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def main():
-    # house1 = House(1)
+    # house1 = House('data_mini.csv')
     # # logger.info('house1.id = {}'.format(house1.id))
     # logger.info('house1.get_all = {}'.format(house1.get_all()))
 
@@ -22,25 +23,28 @@ def main():
     # logger.info('house1.get_address = {}'.format(house1.get_address()))
     # logger.info('house1.get_all = {}'.format(house1.get_all()))
 
+    logger.info('Creating the parser')
     c = CsvParser('data.csv')
-    c.print_csv()
 
-    # logger.info('Adding tricks to dog1...')
-    # dog1.add_trick('jump')
-    # dog1.add_trick("sleep")
-    # logger.info('dog1.tricks = {}'.format(dog1.tricks))
+    # logger.info('Printing the data')
+    # c.print_csv()
 
-    # # Make a bunch of dogs!
-    # logger.info('Making a bunch of dogs!')
-    # dog_list = []
-    # for i in xrange(4):
-        # dog_name = 'dog{}'.format(i)
-        # dog_list.append(Dog(dog_name))
+    # Generate a list of houses
+    # First, split the data
+    logger.info('Splitting the data')
+    split_csv = c.split()
 
-    # for d in dog_list:
-        # logger.info('{}.name = {}'.format(d, d.name))
+    # Now, populate the list of hosues
+    houses = []
+    for csv in split_csv:
+        houses.append(House(csv))
+
+    # Finally, print out the house info
+    for house in houses:
+        logger.info('house_details = <{}>'.format(house.get_all()))
+
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG) # INFO or DEBUG
+    logging.basicConfig(level=logging.INFO) # INFO or DEBUG
     logger.info('Logging Initialized')
     main()

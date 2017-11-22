@@ -4,22 +4,29 @@
 import logging
 import csv
 import string
-import collections
+import locale   # For currency display
+
 
 # Configure Logging
 logger = logging.getLogger(__name__)
 
+# Set the locale
+locale.setlocale( locale.LC_ALL, '' )
+
 
 class House:
 
-    def __init__(self, id=None):
-        self.id = id    # instance variable unique to each instance
+    def __init__(self, raw_data=None):
+        self.raw_data = raw_data    # Raw CSV data
         self.address = None     # The full address (i.e. 1 Main St, Town, MA, 12345)
         self.address_obj = Address()     # The full address (i.e. 1 Main St, Town, MA, 12345)
         self.sales = {}
-        self.sales_date = None
-        self.sales_price = None
-        logger.debug('Initializing self with: id = <{}>'.format(self.id))
+        self.date = None
+        self.price = None
+        logger.debug('Initializing House')
+        if (self.raw_data):
+            self.validate_raw_data()
+            self.parse_raw_data()
 
     def set_address(self, address):
         logger.debug('set_address: <{}>'.format(address))
@@ -35,32 +42,105 @@ class House:
         # it into the Address object
         pass
 
-    def set_sales_date(self, sales_date):
-        logger.debug('set_sales_date: <{}>'.format(sales_date))
-        self.sales_date = sales_date
+    def set_date(self, date):
+        logger.debug('set_date: <{}>'.format(date))
+        self.date = date
 
-    def get_sales_date(self):
-        logger.debug('get_sales_date: <{}>'.format(self.sales_date))
-        return self.sales_date
+    def get_date(self):
+        logger.debug('get_date: <{}>'.format(self.date))
+        return self.date
 
-    def set_sales_price(self, sales_date):
-        logger.debug('set_sales_price: <{}>'.format(sales_price))
-        self.sales_price = sales_price
+    def set_price(self, price):
+        logger.debug('set_price: <{}>'.format(price))
+        self.price = int(price)
 
-    def get_sales_price(self):
-        logger.debug('get_sales_price: <{}>'.format(self.sales_price))
-        return self.sales_price
+    def get_price(self):
+        logger.debug('get_price: <{}>'.format(self.price))
+        return self.price
 
-    def get_all(self):
+    def set_raw_data(self, raw_data):
+        logger.debug('set_raw_data: <{}>'.format(raw_data))
+        self.raw_data = raw_data
+
+    def get_raw_data(self):
+        logger.debug('get_raw_data: <{}>'.format(self.raw_data))
+        return self.raw_data
+
+    def get_all(self, formatting=True):
         all_data = []
 
         all_data.append(self.get_address())
-        all_data.append(self.get_sales_date())
-        all_data.append(self.get_sales_price())
+        all_data.append(self.get_date())
+        all_data.append(
+            locale.currency(self.get_price(), grouping=True ))
 
         logger.debug('get_all: <{}>'.format(all_data))
         return all_data
 
+    def validate_raw_data(self):
+        logger.debug('validate_raw_data: START')
+
+        # Is the data valid
+        is_valid = True
+
+        # Get the raw_data
+        raw_data = self.get_raw_data()
+        logger.debug('raw_data = <{}>'.format(raw_data))
+
+        # There should be exactly 2 rows of data
+        # row1 = header = [label1, label2, etc.]
+        # row2 = data = [value1, value2, etc.]
+        try:
+            if len(raw_data) != 2:
+                logger.error(
+                    'The data provided needs exactly 2 rows:'' 1) Header 2) Data.')
+                is_valid = False
+        except:
+            logger.error('The data provided is not a list.')
+
+        # Check the header row
+        try:
+            if len(raw_data[0]) < 1:
+                logger.error(
+                    'The header row doesnt have enough entries')
+                is_valid = False
+        except:
+            logger.error('The header row is not a list.')
+            is_valid = False
+
+        # Check the data row
+        try:
+            if len(raw_data[1]) < 1:
+                logger.error(
+                    'The data row doesnt have enough entries')
+                is_valid = False
+        except:
+            logger.error('The data row is not a list.')
+            is_valid = False
+
+        logger.debug('validation result = <{}>'.format(is_valid))
+
+        logger.debug('validate_raw_data: END')
+        return is_valid
+
+
+    def parse_raw_data(self):
+        # Get the data
+        (header, data) = self.get_raw_data()
+
+        # Address
+        street = string.capwords(data[header.index('ADDRESS')])
+        city = string.capwords(data[header.index('CITY')])
+        state = data[header.index('STATE')]
+        zipcode = data[header.index('ZIP')]
+        full_address = '{}, {}, {}, {}'.format(street, city, state, zipcode)
+        self.set_address(full_address)
+
+        # Sale Info
+        self.set_date(data[header.index('SOLD DATE')])
+        self.set_price(data[header.index('PRICE')])
+
+        logger.debug('full_address = <{}>'.format(full_address))
 
 class Address:
 
@@ -74,7 +154,7 @@ class Address:
         self.zipcode = None
         self.county = None
         self.country = None
-        logger.debug('Initializing self')
+        logger.debug('Initializing Address')
 
     def set_number(self, number):
         logger.debug('set_number: <{}>'.format(number))
@@ -90,8 +170,8 @@ class CsvParser:
     def __init__(self, filename):
         self.filename = filename
         self.delimiter = ','
-        self.houses = []
         self.csv_file_object = None
+        self.csv_reader_object = None
         logger.debug('Initializing self with: filename = <{}>'.format(
             self.filename))
 
@@ -111,14 +191,6 @@ class CsvParser:
         logger.debug('get_delimiter: <{}>'.format(self.delimiter))
         return self.delimiter
 
-    def set_houses(self, houses):
-        logger.debug('set_houses: <{}>'.format(houses))
-        self.houses = houses
-
-    def get_houses(self):
-        logger.debug('get_houses: <{}>'.format(self.houses))
-        return self.houses
-
     def set_csv_file_object(self, csv_file_object):
         logger.debug('set_csv_file_object: <{}>'.format(csv_file_object))
         self.csv_file_object = csv_file_object
@@ -126,6 +198,14 @@ class CsvParser:
     def get_csv_file_object(self):
         logger.debug('get_csv_file_object: <{}>'.format(self.csv_file_object))
         return self.csv_file_object
+
+    def set_csv_reader_object(self, csv_reader_object):
+        logger.debug('set_csv_reader_object: <{}>'.format(csv_reader_object))
+        self.csv_reader_object = csv_reader_object
+
+    def get_csv_reader_object(self):
+        logger.debug('get_csv_reader_object: <{}>'.format(self.csv_reader_object))
+        return self.csv_reader_object
 
     # Open the csv file
     def open_csv(self):
@@ -171,8 +251,8 @@ class CsvParser:
 
 
     # Print the entire csv file
-    def print_csv(self):
-        logger.debug('print_csv: START')
+    def read_csv(self):
+        logger.debug('read_csv: START')
 
         # Make sure the file is open
         self.open_csv()
@@ -180,8 +260,23 @@ class CsvParser:
         # Get the File object
         f_obj = self.get_csv_file_object()
 
-        logger.debug('print_csv...')
+        # Create the CSV Reader object
+        logger.debug('Opening CSV for reading')
         csv_reader = csv.reader(f_obj, delimiter=',')
+        self.set_csv_reader_object(csv_reader)
+
+        logger.debug('read_csv: END')
+
+
+    # Print the entire csv file
+    def print_csv(self):
+        logger.debug('print_csv: START')
+
+        # Open the file for reading
+        self.read_csv()
+
+        # Get the CSV Reader Object
+        csv_reader = self.get_csv_reader_object()
         for row in csv_reader:
             print ', '.join(row)
 
@@ -191,69 +286,26 @@ class CsvParser:
         logger.debug('print_csv: END')
 
 
+    # Convert to a list of 1-line csv's
+    def split(self):
+        logger.debug('split: START')
 
-def process_csv(csv_file_object):
-    logger.debug('process_csv: START')
-    # list = process_header()
-    #    return a list:
-    #    index 0 == row 0 title,
-    #    index 1 == row 1 title,
-    #    etc.}
-    # for row in csv_file:
-    #    create
+        # Open the file for reading
+        self.read_csv()
 
-    # Determine the dialect
-    dialect = get_dialect(csv_file_object)
+        # Get the CSV Reader Object
+        csv_reader = self.csv_reader_object
 
-    # Create a csv reader object
-    csv_reader = csv.reader(csv_file_object)
+        # Get the header
+        header = csv_reader.next()
 
-    # Process the header row
-    header_list = process_header(csv_reader)
-    address_index = header_list.index('ADDRESS')
+        # Generate the mini-csvs
+        mini_csv_list = []
+        for row in csv_reader:
+            mini_csv_list.append([header, row])
 
-    # Create a list of houses
-    houses = []
+        # Close the file
+        self.close_csv()
 
-    # Create a house for each object
-    for row in csv_reader:
-        logger.debug('row = <{}>'.format(row))
-        h = House()
-        h.set_address(row[address_index])
-        houses.append(h)
-    logger.debug('process_csv: END')
-
-    return houses
-
-
-def process_header(csv_file_object):
-    logger.debug('process_header: START')
-
-    # Read the first line of the csv file
-    header_list = csv_file_object.next()
-
-    logger.debug('header_list = <{}>'.format(header_list))
-
-    logger.debug('process_header: END')
-    return header_list
-
-# Determine the dialect.
-# This does not work with redfin CSV data.  It sets delimiter=':'
-def get_dialect(csv_file_object):
-    logger.debug('get_dialect: START')
-    # Create Sniffer object
-    sniffer = csv.Sniffer()
-
-    # Read in some data
-    data_sample = csv_file_object.read(1024)
-
-    # Determine the dialect
-    dialect = sniffer.sniff(data_sample)
-
-    # Rewind the file
-    csv_file_object.seek(0)
-
-    logger.debug('dialect.delimiter = <{}>'.format(dialect.delimiter))
-
-    logger.debug('get_dialect: END')
-    return dialect
+        logger.debug('split: END')
+        return mini_csv_list
