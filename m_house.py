@@ -5,6 +5,8 @@ import logging
 import csv
 import string
 import locale   # For currency display
+import numpy    # For math
+from scipy import stats    # For science
 
 
 # Configure Logging
@@ -12,6 +14,159 @@ logger = logging.getLogger(__name__)
 
 # Set the locale
 locale.setlocale( locale.LC_ALL, '' )
+
+class Redfin:
+
+    def __init__(self, city=None):
+        self.region_id = {
+            'natick': 12324}
+        self.url = ('https://www.redfin.com/stingray/api/gis-csv?al=3&',
+                    'market=boston&num_homes=350&ord=dollars-per-sq-ft-asc&',
+                    'page_number=1&region_id={}&region_type=6&',
+                    'sold_within_days=36500&sp=true&status=9&',
+                    'uipt=1,2,3,4,5,6&v=8'.format(self.region_id[city]))
+
+class Analysis:
+
+    def __init__(self, dataset=None):
+        self.dataset = dataset
+
+    def history_chart(self, start_year=None, end_year=None):
+        title = '{} to {}'.format(start_year, end_year)
+        logger.info('| {:-^42} |'.format('-'))
+        logger.info('| {:^42} |'.format(title))
+        logger.info('| {:-^42} |'.format('-'))
+        logger.info('| {:^6} | {:^15} | {:^15} |'.format('Year', 'Average', 'Median'))
+        logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
+        for y in range(start_year,end_year+1):
+            self.dataset.filters['year'] = y
+            self.dataset.apply_filters()
+            logger.info('| {:<6} | {:<15} | {:<15} |'.format(
+                y,
+                locale.currency(self.dataset.average_price(), grouping=True),
+                locale.currency(self.dataset.median_price(), grouping=True)))
+        logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
+
+class Dataset:
+
+    def __init__(self, house_list=None):
+        self.house_list = house_list
+        self.house_list_filtered = house_list
+        self.filters = None
+        self.filters_default = {    # We can filter by this
+            'min_price': 0,
+            'max_price': 999999999,
+            'month': None,
+            'year': None,}
+        self.clear_filters()    # Assign the default filters
+
+    def clear_filters(self):
+        logger.debug('clear_filters')
+        self.filters = self.filters_default.copy()
+
+    def apply_filters(self):
+        logger.debug('apply_filters')
+        logger.debug('Filters: <{}>'.format(self.filters))
+
+        # Clear the filtered list
+        self.house_list_filtered = []
+
+        # # Create an temporary list
+        # temp_list = []
+
+        # Apply the filters and populate the filtered list
+        for house in self.house_list:
+            logger.debug('House Price: <{}>'.format(house.price))
+
+            # Price
+            if (house.price >= self.filters['min_price'] and
+                house.price <= self.filters['max_price']):
+                logger.debug('Included: Price')
+            else:
+                logger.debug('Excluded: Price')
+                continue
+
+            # Year
+            logger.debug('Year = <{}>'.format(house.date[-4:]))
+            if self.filters['year']:
+                if (house.date[-4:] == str(self.filters['year'])):
+                    logger.debug('Included: Year')
+                else:
+                    logger.debug('Excluded: Year')
+                    continue
+
+            # Month
+            if self.filters['month']:
+                if (house.date[-4:] == self.filters['month']):
+                    logger.debug('Included: Month')
+                else:
+                    logger.debug('Excluded: Month')
+                    continue
+
+            # It passed all filters, so add it to the list
+            # temp_list.append(house)
+            logger.debug('Add to filtered list')
+            self.house_list_filtered.append(house)
+            logger.debug('len(house_list_filtered)=<{}>'.format(
+                len(self.house_list_filtered)))
+
+        # self.house_list_filtered = temp_list
+
+    def std_deviation(self, conf=0.68):
+        logger.debug('std_deviation')
+        logger.debug('list=<{}>, conf=<{}>'.format(self.get_prices(), conf))
+        mean = numpy.mean(self.get_prices())
+        logger.debug('mean=<{}>'.format(mean))
+
+        sigma = numpy.std(self.get_prices())
+        logger.debug('sigma=<{}>'.format(sigma))
+
+        return stats.norm.interval(conf, loc=mean, scale=sigma)
+
+    def print_average_price(self):
+        logger.info('Average Price: {}'.format(
+            locale.currency(self.average_price(), grouping=True)))
+
+    def print_median_price(self):
+        logger.info('Median Price: {}'.format(
+            locale.currency(self.median_price(), grouping=True)))
+
+    # def average_price(self):
+        # logger.debug('average_price')
+        # logger.debug('price_list=<{}>'.format(self.get_prices()))
+
+        # return numpy.average(self.get_prices())
+
+    def average_price(self):
+        logger.debug('average_price')
+        logger.debug('price_list=<{}>'.format(self.get_prices()))
+
+        average = 0
+        if len(self.get_prices()) > 0:
+            average = numpy.average(self.get_prices())
+
+        return average
+
+    def median_price(self):
+        logger.debug('median_price')
+
+        median = 0
+        if len(self.get_prices()) > 0:
+            median = numpy.median(self.get_prices())
+
+        return median
+
+    def get_prices(self):
+        price_list = []
+
+        for house in self.house_list_filtered:
+            price_list.append(house.price)
+
+        return price_list
+
+    def print_all(self):
+        for house in self.house_list_filtered:
+            logger.info('house_details = <{}>'.format(house.get_all()))
 
 
 class House:
@@ -42,37 +197,17 @@ class House:
         # it into the Address object
         pass
 
-    def set_date(self, date):
-        logger.debug('set_date: <{}>'.format(date))
-        self.date = date
-
-    def get_date(self):
-        logger.debug('get_date: <{}>'.format(self.date))
-        return self.date
-
     def set_price(self, price):
         logger.debug('set_price: <{}>'.format(price))
         self.price = int(price)
-
-    def get_price(self):
-        logger.debug('get_price: <{}>'.format(self.price))
-        return self.price
-
-    def set_raw_data(self, raw_data):
-        logger.debug('set_raw_data: <{}>'.format(raw_data))
-        self.raw_data = raw_data
-
-    def get_raw_data(self):
-        logger.debug('get_raw_data: <{}>'.format(self.raw_data))
-        return self.raw_data
 
     def get_all(self, formatting=True):
         all_data = []
 
         all_data.append(self.get_address())
-        all_data.append(self.get_date())
+        all_data.append(self.date)
         all_data.append(
-            locale.currency(self.get_price(), grouping=True ))
+            locale.currency(self.price, grouping=True))
 
         logger.debug('get_all: <{}>'.format(all_data))
         return all_data
@@ -84,7 +219,7 @@ class House:
         is_valid = True
 
         # Get the raw_data
-        raw_data = self.get_raw_data()
+        raw_data = self.raw_data
         logger.debug('raw_data = <{}>'.format(raw_data))
 
         # There should be exactly 2 rows of data
@@ -126,7 +261,7 @@ class House:
 
     def parse_raw_data(self):
         # Get the data
-        (header, data) = self.get_raw_data()
+        (header, data) = self.raw_data
 
         # Address
         street = string.capwords(data[header.index('ADDRESS')])
@@ -137,7 +272,7 @@ class House:
         self.set_address(full_address)
 
         # Sale Info
-        self.set_date(data[header.index('SOLD DATE')])
+        self.date = data[header.index('SOLD DATE')]
         self.set_price(data[header.index('PRICE')])
 
         logger.debug('full_address = <{}>'.format(full_address))
@@ -175,115 +310,83 @@ class CsvParser:
         logger.debug('Initializing self with: filename = <{}>'.format(
             self.filename))
 
-    def set_filename(self, filename):
-        logger.debug('set_filename: <{}>'.format(filename))
-        self.filename = filename
-
-    def get_filename(self):
-        logger.debug('get_filename: <{}>'.format(self.filename))
-        return self.filename
-
-    def set_delimiter(self, delimiter):
-        logger.debug('set_delimiter: <{}>'.format(delimiter))
-        self.delimiter = delimiter
-
-    def get_delimiter(self):
-        logger.debug('get_delimiter: <{}>'.format(self.delimiter))
-        return self.delimiter
-
-    def set_csv_file_object(self, csv_file_object):
-        logger.debug('set_csv_file_object: <{}>'.format(csv_file_object))
-        self.csv_file_object = csv_file_object
-
-    def get_csv_file_object(self):
-        logger.debug('get_csv_file_object: <{}>'.format(self.csv_file_object))
-        return self.csv_file_object
-
-    def set_csv_reader_object(self, csv_reader_object):
-        logger.debug('set_csv_reader_object: <{}>'.format(csv_reader_object))
-        self.csv_reader_object = csv_reader_object
-
-    def get_csv_reader_object(self):
-        logger.debug('get_csv_reader_object: <{}>'.format(self.csv_reader_object))
-        return self.csv_reader_object
-
     # Open the csv file
-    def open_csv(self):
-        logger.debug('open_csv: START')
+    def open(self):
+        logger.debug('open: START')
 
-        f = self.get_filename()
-        logger.debug('open_csv: filename=<{}>'.format(f))
+        f = self.filename
+        logger.debug('open: filename=<{}>'.format(f))
 
         # Open the file, only if it's not already open
-        if not self.get_csv_file_object():
+        if not self.csv_file_object:
             try:
-                logger.debug('open_csv: opening <{}>'.format(f))
+                logger.debug('open: opening <{}>'.format(f))
                 csvfile = open(f, 'rb')
-                self.set_csv_file_object(csvfile)
+                self.csv_file_object = csvfile
             except IOError as e:
                 logger.error("IO Error({0}): {1}".format(e.errno, e.strerror))
         else:
-            logger.debug('open_csv: "{}" is already open'.format(f))
+            logger.debug('open: "{}" is already open'.format(f))
 
-        logger.debug('open_csv: END')
+        logger.debug('open: END')
 
 
     # Close the csv file
-    def close_csv(self):
-        logger.debug('close_csv: START')
+    def close(self):
+        logger.debug('close: START')
 
-        f = self.get_filename()
-        f_obj = self.get_csv_file_object()
+        f = self.filename
+        f_obj = self.csv_file_object
 
         # Close it, if it's a file object
         if f_obj:
-            logger.debug('close_csv: closing <{}>'.format(f))
+            logger.debug('close: closing <{}>'.format(f))
             try:
                 f_obj.close()
-                self.set_csv_file_object(None)
+                self.csv_file_object = None
             except IOError as e:
-                logger.error("close_csv: IO Error({0}): {1}".format(
+                logger.error("close: IO Error({0}): {1}".format(
                     e.errno, e.strerror))
         else:
-            logger.debug('close_csv: "{}" is already closed'.format(f))
+            logger.debug('close: "{}" is already closed'.format(f))
 
-        logger.debug('close_csv: END')
+        logger.debug('close: END')
 
 
-    # Print the entire csv file
-    def read_csv(self):
-        logger.debug('read_csv: START')
+    # Read the entire csv file
+    def read(self):
+        logger.debug('read: START')
 
         # Make sure the file is open
-        self.open_csv()
+        self.open()
 
         # Get the File object
-        f_obj = self.get_csv_file_object()
+        f_obj = self.csv_file_object
 
         # Create the CSV Reader object
         logger.debug('Opening CSV for reading')
         csv_reader = csv.reader(f_obj, delimiter=',')
-        self.set_csv_reader_object(csv_reader)
+        self.csv_reader_object = csv_reader
 
-        logger.debug('read_csv: END')
+        logger.debug('read: END')
 
 
-    # Print the entire csv file
-    def print_csv(self):
-        logger.debug('print_csv: START')
+    # Show the entire csv file
+    def show(self):
+        logger.debug('show: START')
 
         # Open the file for reading
-        self.read_csv()
+        self.read()
 
         # Get the CSV Reader Object
-        csv_reader = self.get_csv_reader_object()
+        csv_reader = self.csv_reader_object
         for row in csv_reader:
             print ', '.join(row)
 
         # Close the file
-        self.close_csv()
+        self.close()
 
-        logger.debug('print_csv: END')
+        logger.debug('show: END')
 
 
     # Convert to a list of 1-line csv's
@@ -291,7 +394,7 @@ class CsvParser:
         logger.debug('split: START')
 
         # Open the file for reading
-        self.read_csv()
+        self.read()
 
         # Get the CSV Reader Object
         csv_reader = self.csv_reader_object
@@ -305,7 +408,7 @@ class CsvParser:
             mini_csv_list.append([header, row])
 
         # Close the file
-        self.close_csv()
+        self.close()
 
         logger.debug('split: END')
         return mini_csv_list
