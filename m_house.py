@@ -6,8 +6,9 @@ import csv
 import string
 import locale   # For currency display
 import numpy    # For math
-from scipy import stats    # For science
-
+from scipy import stats    # For science!
+from datetime import date
+from time import strptime
 
 # Configure Logging
 logger = logging.getLogger(__name__)
@@ -17,35 +18,112 @@ locale.setlocale( locale.LC_ALL, '' )
 
 class Redfin:
 
-    def __init__(self, city=None):
+    def __init__(self, city='natick'):
+        self.city = city
+        self.max_homes = 999999
         self.region_id = {
-            'natick': 12324}
-        self.url = ('https://www.redfin.com/stingray/api/gis-csv?al=3&',
-                    'market=boston&num_homes=350&ord=dollars-per-sq-ft-asc&',
-                    'page_number=1&region_id={}&region_type=6&',
-                    'sold_within_days=36500&sp=true&status=9&',
-                    'uipt=1,2,3,4,5,6&v=8'.format(self.region_id[city]))
+            'arlington':    29773,
+            'natick':       29757,
+            'newton':       11619,}
+
+    def generate_url(self):
+        logger.debug('generate_link')
+
+        url = ('https://www.redfin.com/stingray/api/gis-csv?al=3&'
+                    'market=boston&'
+                    'num_homes={}&'
+                    'ord=dollars-per-sq-ft-asc&'
+                    'page_number=1&'
+                    'region_id={}&'
+                    'region_type=6&'
+                    'sold_within_days=36500&'
+                    'sp=true&status=9&'
+                    'uipt=1,2,3,4,5,6&'
+                    'v=8'.format(
+                        self.max_homes,
+                        self.region_id[string.lower(self.city)]))
+
+        return url
+
 
 class Analysis:
 
-    def __init__(self, dataset=None):
-        self.dataset = dataset
+    def __init__(self, dataset_dict):
+        self.dataset_dict = dataset_dict
+        self.validate()
+        self.selection = self.dataset_dict.keys()
+
+    def validate(self):
+        logger.debug('validate')
+        if self.dataset_dict:
+            try:
+                for (key, value) in self.dataset_dict.iteritems():
+                    logger.debug('key: <{}> | value = <{}>'.format(key, value))
+            except:
+                logger.error('argument must be a dictionary')
 
     def history_chart(self, start_year=None, end_year=None):
-        title = '{} to {}'.format(start_year, end_year)
-        logger.info('| {:-^42} |'.format('-'))
-        logger.info('| {:^42} |'.format(title))
-        logger.info('| {:-^42} |'.format('-'))
-        logger.info('| {:^6} | {:^15} | {:^15} |'.format('Year', 'Average', 'Median'))
-        logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
-        for y in range(start_year,end_year+1):
-            self.dataset.filters['year'] = y
-            self.dataset.apply_filters()
-            logger.info('| {:<6} | {:<15} | {:<15} |'.format(
-                y,
-                locale.currency(self.dataset.average_price(), grouping=True),
-                locale.currency(self.dataset.median_price(), grouping=True)))
-        logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
+        logger.debug('history_chart')
+
+        for name in self.selection:
+            title1 = string.capwords(name)
+            title2 = '{} to {}'.format(start_year, end_year)
+            logger.info('| {:-^42} |'.format('-'))
+            logger.info('| {:^42} |'.format(title1))
+            logger.info('| {:^42} |'.format(title2))
+            logger.info('| {:-^42} |'.format('-'))
+            logger.info('| {:^6} | {:^15} | {:^15} |'.format('Year', 'Average', 'Median'))
+            logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
+            for year in range(start_year,end_year+1):
+                self.dataset_dict[name].filters['year'] = year
+                self.dataset_dict[name].apply_filters()
+                logger.info('| {:<6} | {:<15} | {:<15} |'.format(
+                    year,
+                    locale.currency(self.dataset_dict[name].average_price(), grouping=True),
+                    locale.currency(self.dataset_dict[name].median_price(), grouping=True)))
+
+                # Clear the time filter
+                self.dataset_dict[name].filters['year'] = None
+            logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
+
+    def time_chart(self, units, start, end):
+        logger.debug('time_chart')
+
+        # Generate list of valid time units
+        #   self.selection[0] == 1st key from dataset_dict
+        #   self.dataset_dict[...] == the dataset indicated by that 1st key
+        #   .filters.keys() == List of filter keys for that dataset
+        valid_units = self.dataset_dict[self.selection[0]].filters.keys()
+        if units not in valid_units:
+            logger.error('{} not valid.  Should be one of {}'.format(
+                units, valid_units))
+
+        units_cap = string.capwords(units)
+
+        for name in self.selection:
+            title1 = string.capwords(name)
+            title2 = '{} to {}'.format(start, end)
+            logger.info('| {:-^42} |'.format('-'))
+            logger.info('| {:^42} |'.format(title1))
+            logger.info('| {:^42} |'.format(title2))
+            logger.info('| {:-^42} |'.format('-'))
+            logger.info('| {:^6} | {:^15} | {:^15} |'.format(
+                units_cap, 'Average', 'Median'))
+            logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
+            for time in range(start,end+1):
+                self.dataset_dict[name].filters[units] = time
+                self.dataset_dict[name].apply_filters()
+                logger.info('| {:<6} | {:<15} | {:<15} |'.format(
+                    time,
+                    locale.currency(self.dataset_dict[name].average_price(),
+                                    grouping=True),
+                    locale.currency(self.dataset_dict[name].median_price(),
+                                    grouping=True)))
+
+                # Clear the time filter
+                self.dataset_dict[name].filters[units] = None
+            logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
+
 
 class Dataset:
 
@@ -71,11 +149,10 @@ class Dataset:
         # Clear the filtered list
         self.house_list_filtered = []
 
-        # # Create an temporary list
-        # temp_list = []
-
         # Apply the filters and populate the filtered list
         for house in self.house_list:
+            logger.debug('Filtering against this address now: <{}>'.format(
+                house.address))
             logger.debug('House Price: <{}>'.format(house.price))
 
             # Price
@@ -86,31 +163,48 @@ class Dataset:
                 logger.debug('Excluded: Price')
                 continue
 
+            # # Year
+            # logger.debug('Year = <{}>'.format(house.sale_date[-4:]))
+            # if self.filters['year']:
+                # if (house.sale_date[-4:] == str(self.filters['year'])):
+                    # logger.debug('Included: Year')
+                # else:
+                    # logger.debug('Excluded: Year')
+                    # continue
+
             # Year
-            logger.debug('Year = <{}>'.format(house.date[-4:]))
+            # logger.debug('Year = <{}>'.format(house.date_obj.year))
+            logger.debug('Date = <{}>'.format(house.date_obj))
             if self.filters['year']:
-                if (house.date[-4:] == str(self.filters['year'])):
-                    logger.debug('Included: Year')
+                if house.date_obj:
+                    if (house.date_obj.year == self.filters['year']):
+                        logger.debug('Included: Year')
+                    else:
+                        logger.debug('Excluded: Year')
+                        continue
                 else:
-                    logger.debug('Excluded: Year')
+                    logger.debug('Excluded: No Date')
                     continue
 
             # Month
+            # logger.debug('Month = <{}>'.format(house.date_obj.month))
+            logger.debug('Date = <{}>'.format(house.date_obj))
             if self.filters['month']:
-                if (house.date[-4:] == self.filters['month']):
-                    logger.debug('Included: Month')
+                if house.date_obj:
+                    if (house.date_obj.month == self.filters['month']):
+                        logger.debug('Included: Year')
+                    else:
+                        logger.debug('Excluded: Year')
+                        continue
                 else:
-                    logger.debug('Excluded: Month')
+                    logger.debug('Excluded: No Date')
                     continue
 
             # It passed all filters, so add it to the list
-            # temp_list.append(house)
             logger.debug('Add to filtered list')
             self.house_list_filtered.append(house)
             logger.debug('len(house_list_filtered)=<{}>'.format(
                 len(self.house_list_filtered)))
-
-        # self.house_list_filtered = temp_list
 
     def std_deviation(self, conf=0.68):
         logger.debug('std_deviation')
@@ -176,12 +270,26 @@ class House:
         self.address = None     # The full address (i.e. 1 Main St, Town, MA, 12345)
         self.address_obj = Address()     # The full address (i.e. 1 Main St, Town, MA, 12345)
         self.sales = {}
-        self.date = None
+        self.sale_date = None
+        self.date_obj = None
         self.price = None
         logger.debug('Initializing House')
         if (self.raw_data):
             self.validate_raw_data()
             self.parse_raw_data()
+        if self.sale_date:
+            self.set_date()
+
+    def set_date(self):
+        month_name, day, year = self.sale_date.split('-')
+        month_num = strptime(
+            month_name,
+            '%B').tm_mon
+
+        self.date_obj = date(
+            int(year),
+            month_num,
+            int(day))
 
     def set_address(self, address):
         logger.debug('set_address: <{}>'.format(address))
@@ -205,7 +313,7 @@ class House:
         all_data = []
 
         all_data.append(self.get_address())
-        all_data.append(self.date)
+        all_data.append(self.sale_date)
         all_data.append(
             locale.currency(self.price, grouping=True))
 
@@ -272,10 +380,11 @@ class House:
         self.set_address(full_address)
 
         # Sale Info
-        self.date = data[header.index('SOLD DATE')]
+        self.sale_date = data[header.index('SOLD DATE')]
         self.set_price(data[header.index('PRICE')])
 
         logger.debug('full_address = <{}>'.format(full_address))
+
 
 class Address:
 
