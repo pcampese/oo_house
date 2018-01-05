@@ -124,6 +124,87 @@ class Analysis:
                 self.dataset_dict[name].filters[units] = None
             logger.info('| {:-^6} | {:-^15} | {:-^15} |'.format('-', '-', '-'))
 
+    def time_chart_percentile(self, units, start, end):
+        logger.debug('time_chart_percentile')
+
+        # Generate list of valid time units
+        #   self.selection[0] == 1st key from dataset_dict
+        #   self.dataset_dict[...] == the dataset indicated by that 1st key
+        #   .filters.keys() == List of filter keys for that dataset
+        valid_units = self.dataset_dict[self.selection[0]].filters.keys()
+        if units not in valid_units:
+            logger.error('{} not valid.  Should be one of {}'.format(
+                units, valid_units))
+
+        units_cap = string.capwords(units)
+
+        percentiles = [5, 10, 20, 25, 50, 75, 80]
+
+        for name in self.selection:
+            # Format the calculated data
+            formatted_data = []
+            column_width = 0
+
+            for time in range(start,end+1):
+                self.dataset_dict[name].filters[units] = time
+                self.dataset_dict[name].apply_filters()
+
+                # Dynamic width based on the percentiles provided
+                formatted_row = '| {:<6} |'.format(time)
+                for p in percentiles:
+                    price, count = self.dataset_dict[name].percentile_price(p)
+
+                    # Count number of homes that are within this percentile
+                    self.dataset_dict[name].save_filters()
+                    self.dataset_dict[name].filters['max_price'] = price
+                    self.dataset_dict[name].apply_filters()
+                    count = len(self.dataset_dict[name].get_prices())
+                    self.dataset_dict[name].restore_filters()
+                    self.dataset_dict[name].apply_filters()
+
+                    column = (' {:<15} ({:3}) |'.format(
+                        locale.currency(price,
+                                        grouping=True),
+                        count))
+                    column_width = len(column)-3    # Get column width
+                    formatted_row += column
+                formatted_data.append(formatted_row)
+
+            # Format the minor headings
+            formatted_minor = '| {:^6} |'.format(units_cap)
+            formatted_divider = '| {:-^6} |'.format('-')
+            for p in percentiles:
+                formatted_p = '{}%'.format(p)
+                formatted_minor += ' {:^{}} |'.format(formatted_p, column_width)
+
+                formatted_divider += ' {:-^{}} |'.format('-', column_width)
+
+            # Get the row width
+            row_width = len(formatted_data[0])-4
+
+            # Format and print the major headings
+            title1 = string.capwords(name)
+            title2 = '{} to {}'.format(start, end)
+            title3 = 'Percentile'
+            logger.info('| {:-^{}} |'.format('-', row_width))
+            logger.info('| {:^{}} |'.format(title1, row_width))
+            logger.info('| {:^{}} |'.format(title2, row_width))
+            logger.info('| {:^{}} |'.format(title3, row_width))
+            logger.info('| {:-^{}} |'.format('-', row_width))
+
+            # Print the minor headings
+            logger.info(formatted_minor)
+            logger.info(formatted_divider)
+
+            # Print the data
+            for row in formatted_data:
+                logger.info(row)
+
+            logger.info(formatted_divider)
+
+            # Clear the time filter
+            self.dataset_dict[name].filters[units] = None
+
 
 class Dataset:
 
@@ -134,9 +215,18 @@ class Dataset:
         self.filters_default = {    # We can filter by this
             'min_price': 0,
             'max_price': 999999999,
+            'beds': None,
+            'baths': None,
             'month': None,
             'year': None,}
+        self.filters_stack = []
         self.clear_filters()    # Assign the default filters
+
+    def save_filters(self):
+        self.filters_stack.append(self.filters.copy())
+
+    def restore_filters(self):
+        self.filters = self.filters_stack.pop()
 
     def clear_filters(self):
         logger.debug('clear_filters')
@@ -163,17 +253,7 @@ class Dataset:
                 logger.debug('Excluded: Price')
                 continue
 
-            # # Year
-            # logger.debug('Year = <{}>'.format(house.sale_date[-4:]))
-            # if self.filters['year']:
-                # if (house.sale_date[-4:] == str(self.filters['year'])):
-                    # logger.debug('Included: Year')
-                # else:
-                    # logger.debug('Excluded: Year')
-                    # continue
-
             # Year
-            # logger.debug('Year = <{}>'.format(house.date_obj.year))
             logger.debug('Date = <{}>'.format(house.date_obj))
             if self.filters['year']:
                 if house.date_obj:
@@ -187,7 +267,6 @@ class Dataset:
                     continue
 
             # Month
-            # logger.debug('Month = <{}>'.format(house.date_obj.month))
             logger.debug('Date = <{}>'.format(house.date_obj))
             if self.filters['month']:
                 if house.date_obj:
@@ -198,6 +277,32 @@ class Dataset:
                         continue
                 else:
                     logger.debug('Excluded: No Date')
+                    continue
+
+            # Beds
+            logger.debug('Beds = <{}>'.format(house.beds))
+            if self.filters['beds']:
+                if house.beds:
+                    if (house.beds >= self.filters['beds']):
+                        logger.debug('Included: Beds')
+                    else:
+                        logger.debug('Excluded: Beds')
+                        continue
+                else:
+                    logger.debug('Excluded: No Beds')
+                    continue
+
+            # Baths
+            logger.debug('Baths = <{}>'.format(house.baths))
+            if self.filters['baths']:
+                if house.baths:
+                    if (house.baths >= self.filters['baths']):
+                        logger.debug('Included: Baths')
+                    else:
+                        logger.debug('Excluded: Baths')
+                        continue
+                else:
+                    logger.debug('Excluded: No Baths')
                     continue
 
             # It passed all filters, so add it to the list
@@ -225,30 +330,53 @@ class Dataset:
         logger.info('Median Price: {}'.format(
             locale.currency(self.median_price(), grouping=True)))
 
-    # def average_price(self):
-        # logger.debug('average_price')
-        # logger.debug('price_list=<{}>'.format(self.get_prices()))
+    def print_percentile_price(self):
+        percentiles = [25, 50, 75]
 
-        # return numpy.average(self.get_prices())
+        for p in percentiles:
+            logger.info('Percentile Price ({}%): {}'.format(
+                p,
+                locale.currency(self.percentile_price(p),
+                                grouping=True)))
 
     def average_price(self):
         logger.debug('average_price')
-        logger.debug('price_list=<{}>'.format(self.get_prices()))
 
         average = 0
+        price_list = self.get_prices()
         if len(self.get_prices()) > 0:
-            average = numpy.average(self.get_prices())
+            average = numpy.average(price_list)
 
-        return average
+        price_list_count = len(price_list)
+
+        return (average, price_list_count)
 
     def median_price(self):
         logger.debug('median_price')
 
         median = 0
+        price_list = self.get_prices()
         if len(self.get_prices()) > 0:
-            median = numpy.median(self.get_prices())
+            median = numpy.median(price_list)
 
-        return median
+        price_list_count = len(price_list)
+
+        return (median, price_list_count)
+
+    def percentile_price(self, percentile=None):
+        logger.debug('percentile_price')
+
+        if not percentile:
+            percentile = 50      # The default percentile
+        percentiles_results = 0
+        price_list = self.get_prices()
+
+        if len(self.get_prices()) > 0:
+            percentiles_results = numpy.percentile(price_list, percentile)
+
+        price_list_count = len(price_list)
+
+        return (percentiles_results, price_list_count)
 
     def get_prices(self):
         price_list = []
@@ -273,6 +401,8 @@ class House:
         self.sale_date = None
         self.date_obj = None
         self.price = None
+        self.beds = None
+        self.baths = None
         logger.debug('Initializing House')
         if (self.raw_data):
             self.validate_raw_data()
@@ -308,6 +438,16 @@ class House:
     def set_price(self, price):
         logger.debug('set_price: <{}>'.format(price))
         self.price = int(price)
+
+    def set_beds(self, beds):
+        logger.debug('set_beds: <{}>'.format(beds))
+        if beds:
+            self.beds = int(beds)
+
+    def set_baths(self, baths):
+        logger.debug('set_baths: <{}>'.format(baths))
+        if baths:
+            self.baths = float(baths)
 
     def get_all(self, formatting=True):
         all_data = []
@@ -382,6 +522,10 @@ class House:
         # Sale Info
         self.sale_date = data[header.index('SOLD DATE')]
         self.set_price(data[header.index('PRICE')])
+
+        # Bedroom and Bathroom count
+        self.set_beds(data[header.index('BEDS')])
+        self.set_baths(data[header.index('BATHS')])
 
         logger.debug('full_address = <{}>'.format(full_address))
 
