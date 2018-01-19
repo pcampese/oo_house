@@ -9,6 +9,7 @@ import numpy    # For math
 from scipy import stats    # For science!
 from datetime import date
 from time import strptime
+import os.path  # To check files
 
 # Configure Logging
 logger = logging.getLogger(__name__)
@@ -20,11 +21,26 @@ class Redfin:
 
     def __init__(self, city='natick'):
         self.city = city
+        self.sold_within_days = 1095    # 1095 days = 3 years
         self.max_homes = 999999
         self.region_id = {
             'arlington':    29773,
+            'bedford':      29655,
+            'belmont':      29700,
+            'burlington':   29663,
+            'framingham':   29626,
+            'lexington':    29734,
+            'lincoln':      29685,
             'natick':       29757,
-            'newton':       11619,}
+            'needham':      29787,
+            'newton':       11619,
+            'stoneham':     29598,
+            'waltham':      18529,
+            'watertown':    29540,
+            'wayland':      29624,
+            'wellesley':    29742,
+            'weston':       29572,
+            'woburn':       20294}
 
     def generate_url(self):
         logger.debug('generate_link')
@@ -36,14 +52,45 @@ class Redfin:
                     'page_number=1&'
                     'region_id={}&'
                     'region_type=6&'
-                    'sold_within_days=36500&'
+                    'sold_within_days={}}&'
                     'sp=true&status=9&'
                     'uipt=1,2,3,4,5,6&'
                     'v=8'.format(
                         self.max_homes,
-                        self.region_id[string.lower(self.city)]))
+                        self.region_id[string.lower(self.city)]
+                        self.sold_within_days))
 
         return url
+
+    def update_data(self, new_filename):
+        existing_filename = '{}_data.csv'.format(self.city)
+        existing_lines = []
+
+        # Figure out the correct starting point for the data
+        # If the file already exists, then open it
+        if(os.path.isfile(existing_filename)):
+            # The file exists, so open the file for reading
+            try:
+                # Try to open the file for reading.
+                existing_file_object = open(existing_filename, 'r')
+            except IOError as e:
+                # The file cannot open, so error
+                logger.error('Error opening file.'
+                             '  Filename: [{}].'
+                             '  Error number: [{}]'
+                             '  Error message: [{}]'.format(existing_filename,
+                                                            e.errno,
+                                                            e.strerror))
+            else:
+                # The file can open, so log a succesful debug message
+                logger.debug('Succesfully opened file: [{}]'.format(
+                    existing_filename))
+
+                # Read in all the existing_lines
+                existing_lines = existing_file_object.readlines()
+
+                # Close the file
+                existing_lines.close()
 
 
 class Analysis:
