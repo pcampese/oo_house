@@ -1,0 +1,19 @@
+1 month
+
+https://www.redfin.com/stingray/api/gis-csv?al=3&market=boston&num_homes=350&ord=redfin-recommended-asc&page_number=1&region_id=29540&region_type=6&sold_within_days=30&sp=true&status=9&uipt=1,2,3,4,5,6&v=8
+
+3 months
+
+https://www.redfin.com/stingray/api/gis-csv?al=3&market=boston&num_homes=350&ord=redfin-recommended-asc&page_number=1&region_id=29540&region_type=6&sold_within_days=90&sp=true&status=9&uipt=1,2,3,4,5,6&v=8
+
+1 years
+
+https://www.redfin.com/stingray/api/gis-csv?al=3&market=boston&num_homes=350&ord=redfin-recommended-asc&page_number=1&region_id=29540&region_type=6&sold_within_days=365&sp=true&status=9&uipt=1,2,3,4,5,6&v=8
+
+2  years
+
+https://www.redfin.com/stingray/api/gis-csv?al=3&market=boston&num_homes=350&ord=redfin-recommended-asc&page_number=1&region_id=29540&region_type=6&sold_within_days=730&sp=true&status=9&uipt=1,2,3,4,5,6&v=8
+
+3 years
+
+https://www.redfin.com/stingray/api/gis-csv?al=3&market=boston&num_homes=350&ord=redfin-recommended-asc&page_number=1&region_id=29540&region_type=6&sold_within_days=1095&sp=true&status=9&uipt=1,2,3,4,5,6&v=8
