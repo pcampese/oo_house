@@ -82,8 +82,8 @@ class Redfin:
                                                             e.errno,
                                                             e.strerror))
             else:
-                # The file can open, so log a succesful debug message
-                logger.debug('Succesfully opened file: [{}]'.format(
+                # The file can open, so log a successful debug message
+                logger.debug('Successfully opened file: [{}]'.format(
                     existing_filename))
 
                 # Read in all the existing_lines
